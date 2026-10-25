@@ -1,0 +1,769 @@
+# Project Requirements for Claude — Smart Emergency Blood Allocation & Dispatch Engine
+
+## 1. Your Role and Goal
+
+Act as a senior full-stack engineer and a Data Structures and Algorithms (DSA) teaching mentor. Design and implement a **small-to-medium, fully functional academic course project** for a second-year B.Tech Fundamentals of Data Structures subject.
+
+The project must be realistic enough to demonstrate a useful workflow, but **must not become a major hospital-management system**. Its main purpose is to demonstrate correct, visible, and testable implementation of the data structures and algorithms in the syllabus.
+
+Build a working web application named:
+
+**Smart Emergency Blood Allocation & Dispatch Engine**
+
+Tagline: **Prioritize urgent requests. Allocate compatible stock. Reduce expiry waste.**
+
+Use the attached synopsis as the project’s starting point. It describes emergency blood requests, urgency-based prioritization, blood inventory, First-Expired-First-Out (FEFO) allocation, compatibility checks, sorting/searching, and dispatch logs.
+
+---
+
+## 2. Problem Statement
+
+Blood banks may need to manage multiple hospital requests with different urgency levels while tracking blood bags with different blood groups, quantities, collection dates, and expiry dates. Handling these records manually can make it harder to prioritize critical requests, find compatible available stock, and dispatch stock that is closer to expiry.
+
+This project simulates a blood-bank inventory and dispatch workflow. It stores blood stock and hospital requests, prioritizes requests according to urgency and arrival time, checks a configurable blood-compatibility rule set, allocates eligible stock using FEFO, and records the result of each allocation attempt. A dashboard displays stock levels, pending requests, expiry warnings, and dispatch history.
+
+**Important scope boundary:** This is an educational simulation, not a clinical decision-support system. Do not present the allocation result as medical advice or as suitable for real-world transfusion decisions. Compatibility rules must be clearly labelled as simplified educational rules and should be verified by qualified professionals before any real-world use. Do not connect to real hospitals or handle real patient-identifying data.
+
+---
+
+## 3. Project Objectives
+
+1. Build a usable frontend with a dashboard and forms for blood stock and hospital requests.
+2. Build a backend API and persistent database.
+3. Implement core DSA concepts manually and correctly, rather than only calling built-in sorting/queue/heap utilities.
+4. Make each important DSA operation visible in the UI or in a DSA demonstration page.
+5. Ensure allocation follows the defined rules and never allocates expired, unavailable, or incompatible stock.
+6. Keep the application small enough for a student team to complete, test, explain, and demonstrate.
+7. Include test cases and a README that explains each selected data structure, why it fits, its time complexity, and where it is used.
+
+---
+
+## 4. Recommended Scope and Technology
+
+Use a simple, maintainable full-stack architecture.
+
+### Frontend
+- React + TypeScript
+- Vite
+- Tailwind CSS (or simple CSS if Tailwind setup becomes a distraction)
+- Lucide icons, if useful
+- Responsive layout for desktop and mobile
+
+### Backend
+- Node.js + Express + TypeScript
+- REST API
+- Input validation and centralized error handling
+
+### Database
+- SQLite for a lightweight local project
+- Use a small ORM only if it simplifies development; raw SQL is acceptable
+- Store persistent records in the database, but load relevant records into custom in-memory data structures when running allocation/search/sort operations
+
+### Testing
+- Vitest or Jest for unit tests
+- Test the custom DSA implementations independently from the UI and database
+
+### General constraints
+- No authentication is required for the first version. If time remains, add a simple demo-only admin login, but do not let authentication delay the DSA work.
+- No real-time WebSockets are required. Refresh dashboard data after actions or use simple polling only if needed.
+- Do not add maps, real routing APIs, AI/ML predictions, payment systems, SMS integrations, or external hospital integrations.
+- Seed the app with synthetic demonstration records so it works immediately after setup.
+- Keep setup to a few commands and document them clearly.
+
+---
+
+## 5. Functional Requirements
+
+### 5.1 Dashboard
+Show:
+- Total available, non-expired units
+- Total registered blood bags
+- Pending requests
+- Critical requests waiting
+- Bags expiring soon (for example, within 7 days; make this threshold configurable)
+- Recently completed dispatches
+- Blood-group stock summary
+
+Dashboard counts must come from actual database/application state, not hard-coded values.
+
+### 5.2 Blood Inventory
+The user must be able to:
+- Add a blood bag/unit record
+- View all stock with search, filters, and sorting
+- View stock by blood group and availability status
+- Update editable details
+- Mark stock as unavailable/removed through a controlled action
+- See expired stock clearly separated from usable stock
+
+Suggested fields:
+- `id` / `bagId`
+- `bloodGroup` (A+, A-, B+, B-, AB+, AB-, O+, O-)
+- `collectionDate`
+- `expiryDate`
+- `volumeMl` (optional; if included, keep it consistent)
+- `bloodBankName` or `location` (keep this simple)
+- `status` (available, reserved, dispatched, expired, discarded)
+- `createdAt`
+
+Validation:
+- Blood group must be one of the supported values.
+- Expiry date must be later than collection date.
+- A dispatched, discarded, or expired bag cannot be allocated again.
+- Do not allow duplicate bag IDs.
+- Use synthetic data only.
+
+### 5.3 Hospital Requests
+The user must be able to:
+- Create a request
+- View pending, partially fulfilled, fulfilled, and cancelled requests
+- View request priority and arrival order
+- Process the next highest-priority request
+- See which bags were allocated and why
+- See an explicit shortage message if not enough compatible stock exists
+
+Suggested fields:
+- `id` / `requestId`
+- `hospitalName`
+- `requiredBloodGroup`
+- `unitsNeeded`
+- `urgencyLevel` (1 = Critical/Trauma, 2 = Surgery, 3 = Routine)
+- `createdAt` / arrival sequence
+- `status` (pending, partially_fulfilled, fulfilled, cancelled)
+- `unitsAllocated`
+- `notes` (optional; no patient-identifying information)
+
+Validation:
+- Units needed must be a positive integer.
+- Urgency must be 1, 2, or 3.
+- A request that has been fulfilled or cancelled cannot be processed again.
+- Request timestamps and arrival sequence must be stable enough to break priority ties.
+
+### 5.4 Request Processing and Allocation
+When the user chooses **Process Next Request**:
+1. Select the highest-priority pending request using a custom binary heap.
+2. Break ties by earlier arrival time/sequence.
+3. Remove expired stock from eligibility before allocation; expired stock must never be allocated.
+4. Determine eligible donor blood groups using a clearly documented, simplified compatibility lookup table.
+5. Among eligible stock, allocate the bags with the earliest expiry date first (FEFO).
+6. Allocate only the number of units actually available and compatible.
+7. Update inventory and request status consistently.
+8. Record a dispatch/allocation log containing the request, allocated bag IDs, date/time, and outcome.
+9. If stock is insufficient, mark the request partially fulfilled or still pending according to a clearly documented policy. Recommended simple policy: record the fulfilled units, set `partially_fulfilled` if at least one unit was allocated, and leave the unfulfilled quantity visible. If none could be allocated, leave it pending and report the shortage.
+10. Display a readable explanation: selected request, priority reason, compatibility groups considered, bags chosen by FEFO, and any remaining shortage.
+
+Do not silently lose or skip requests. Define and test what happens to a partially fulfilled request in the priority queue. A practical simple policy is to reinsert a partially fulfilled request with its remaining units and original arrival sequence, while avoiding an infinite automatic processing loop. The UI should process only one request per click.
+
+### 5.5 Search, Sort, and Filters
+Provide:
+- Search inventory by bag ID
+- Filter inventory by blood group and status
+- Sort inventory by expiry date, collection date, or blood group
+- Search requests by request ID or hospital name
+- Filter requests by status and urgency
+- Sort dispatch history by time
+
+Use the custom algorithms described in Section 7 for the relevant operations. It is fine to use database indexes for persistence, but the DSA demo operations must explicitly run the project’s own implementations.
+
+### 5.6 Dispatch History
+Show:
+- Request ID and hospital
+- Requested blood group and quantity
+- Allocated bag IDs and actual donor groups
+- Time of processing
+- Number fulfilled and remaining
+- Result (fulfilled, partially fulfilled, no stock)
+- A short explanation of the allocation decision
+
+Dispatch history should be append-only from the user’s perspective. Do not allow users to edit old dispatch records casually.
+
+### 5.7 DSA Demonstration Page
+Include a simple page or panel called **DSA Lab** that demonstrates the actual data structures used:
+- Add sample requests and show the binary heap’s root / processing order
+- Show a per-blood-group FEFO structure ordered by expiry
+- Run linear search and binary search on suitable sample arrays
+- Run Merge Sort and Quick Sort on a sample inventory list and show before/after order
+- Show BFS/DFS only if a graph feature is actually included; do not add a fake or disconnected graph demo just to claim coverage
+- Show a small hash-table lookup for bag ID or blood-group lookup if implemented
+- Display operation counts or simple time-complexity notes, not misleading benchmark claims
+
+The main application must still use the same DSA implementation as the DSA Lab. Do not create a separate fake demo implementation.
+
+---
+
+## 6. DSA Analysis Against the Course Syllabus
+
+The course syllabus covers arrays/searching/sorting, linked lists, stacks/queues, trees, graphs, and hashing. The project should implement a **focused subset well**, rather than forcing every syllabus topic into one app.
+
+### A. Highest priority — directly useful to the problem
+
+#### 1. Binary Heap / Priority Queue — MUST IMPLEMENT
+**Use:** Select the next emergency request.
+
+- Implement a custom binary heap (prefer a min-heap by priority key, or a max-heap with a clearly defined comparator).
+- Priority order: urgency level 1 before 2 before 3; within the same urgency, earlier arrival sequence first.
+- This ordering is clearer and safer for an academic implementation than the synopsis’s ambiguous composite score formula.
+- Do not rely on a built-in priority queue library.
+- Operations: insert, peek, extract/remove root, heapify/rebuild if needed.
+- Expected complexity: peek `O(1)`, insert `O(log n)`, extract `O(log n)`, build heap `O(n)`.
+
+**Correctness requirement:** If using a comparator, centralize it and unit-test it. Do not mix “level 1 is most urgent” with numeric max-heap logic without explicitly handling the direction.
+
+#### 2. FEFO Inventory Structure — MUST IMPLEMENT
+**Use:** Choose the available compatible bag with the earliest expiry date.
+
+Recommended implementation: maintain a separate custom **min-heap per blood group**, keyed by expiry date and then bag ID. This directly demonstrates heap operations and makes the next-to-expire eligible bag available at the root.
+
+- Insert bag: `O(log n)`
+- Peek earliest expiry: `O(1)`
+- Remove earliest expiry: `O(log n)`
+- Remove expired stock from the eligible structure or skip it safely and mark its status as expired.
+- Keep the database as the persistent source of truth and synchronize inventory status and heap contents after every operation.
+- Avoid claiming that a whole heap can be “swept” in `O(1)`: only checking the root is `O(1)`; removing each expired root costs `O(log n)` per removal.
+
+#### 3. Blood-Group Compatibility Lookup — MUST IMPLEMENT
+**Use:** Decide which stock groups can be considered for a requested group.
+
+- Use a fixed, clearly documented lookup table / compatibility matrix for the **educational simulation**.
+- Keep compatibility logic in a dedicated, unit-tested function/module.
+- Do not infer compatibility from string comparisons.
+- The matrix must be applied consistently before any bag is allocated.
+- Make the interface show the requested group and eligible stock groups.
+- Important: real transfusion compatibility is more nuanced than a simple ABO/Rh table and depends on clinical testing and protocols. Clearly label this as simplified educational logic and never describe it as safe for real transfusions.
+
+#### 4. Sorting — MUST IMPLEMENT AT LEAST TWO
+**Use:** Sort stock by expiry date, collection date, or group for inventory views and analytics.
+
+Recommended:
+- **Merge Sort:** stable, `O(n log n)` time, typically `O(n)` auxiliary space.
+- **Quick Sort:** average `O(n log n)`, worst case `O(n²)`; use a randomized or median-of-three pivot if appropriate, or clearly document the pivot choice.
+
+Implement these yourself for arrays of inventory records. The UI must allow a user to trigger the sort and see the sorted result. Use a deterministic tie-breaker such as bag ID.
+
+Do not claim that Quick Sort is always `O(n log n)`; document its worst case.
+
+#### 5. Searching — MUST IMPLEMENT AT LEAST TWO, WITH CORRECT PRECONDITIONS
+- **Linear Search:** use for unsorted records, such as finding a bag ID in a current list. Complexity `O(n)`.
+- **Binary Search:** use only on an array sorted by the exact search key. For example, sort bag records by bag ID and then binary-search by bag ID. Complexity `O(log n)` after sorting; sorting cost must not be hidden when reporting end-to-end cost.
+
+**Important correction to the synopsis:** Binary search should not be applied directly to a heap’s internal array because a heap is not globally sorted. Use binary search on a sorted array, or use a hash lookup for exact IDs.
+
+Optional: Fibonacci Search may be included in the DSA Lab only if implemented correctly on a sorted array. It is not required for the core workflow.
+
+#### 6. Hash Table — RECOMMENDED, SMALL ADDITION
+**Use:** Fast lookup by unique bag ID or request ID.
+
+- Implement a custom hash table with separate chaining or open addressing.
+- Explain hash function, collision handling, and average/worst-case lookup complexity.
+- Use it for exact ID lookup if the implementation remains manageable.
+- If the database is used for ordinary app reads, make it clear that the custom hash table is an in-memory DSA structure used by the project’s search/index layer, not a replacement for persistent storage.
+
+### B. Useful but optional
+
+#### 7. Queue / Circular Queue
+A queue can represent arrival order or a small dispatch-processing buffer. However, the emergency request priority queue must be the heap, not a plain FIFO queue, because urgency changes the processing order.
+
+If implementing a circular queue, use it for a clearly defined bounded event/log buffer or a separate arrival-order view. Do not add it merely to claim syllabus coverage.
+
+#### 8. Linked List
+A singly linked list can represent a simple append-only in-memory dispatch event list, or a small demonstration of insertion/deletion/traversal. But a linked list is not automatically the best structure for inventory searching or FEFO allocation. If time is limited, do not prioritize it over heap, compatibility, search, and sorting.
+
+#### 9. Arrays
+Arrays are naturally suitable for inventory snapshots, sorted lists, binary search, Merge Sort, and Quick Sort. Use them explicitly in the algorithm modules.
+
+### C. Do not force these into the project
+The following syllabus concepts are not needed for the core problem and should be omitted unless there is a genuinely useful extension:
+- Sparse matrix transpose
+- Generalized linked lists
+- Stack-based infix/prefix/postfix conversion and evaluation
+- Josephus problem
+- Binary search trees / threaded binary trees
+- BFS/DFS, bipartite graph, cycle detection, Prim’s/Kruskal’s MST, shortest paths, Union-Find
+- Extendible hashing
+- Radix Sort, Shell Sort, Bucket Sort, Heap Sort as separate sorting algorithms beyond the heap data structure already required
+
+Do not add an unrelated graph/network visualizer simply to tick more syllabus topics. The project will be stronger if it demonstrates a smaller set correctly and explains why those structures fit the problem.
+
+---
+
+## 6A. Syllabus-by-Syllabus DSA Suitability Analysis — Read This Before Coding
+
+This section is the project's explicit DSA selection decision. Claude must use it to decide what to implement, what to demonstrate only, and what to exclude. **Do not claim that the project covers a syllabus topic unless the corresponding algorithm/data structure is implemented, used meaningfully, and tested.**
+
+### Unit 1 — Arrays, Searching, Sorting, Complexity
+
+| Syllabus topic | Decision | Exact project use and reasoning |
+|---|---|---|
+| ADT and data structure fundamentals | Explain in report | Describe the request-priority queue, FEFO inventory structure, hash table, and arrays as abstract/data structures with defined operations. No separate feature is needed. |
+| Linear/non-linear, static/dynamic, persistent/ephemeral classifications | Explain in report | Classify arrays/heaps/hash table and database persistence accurately. Do not build artificial features just to demonstrate the classifications. |
+| Asymptotic notation, time and space complexity | Required documentation | Include Big-O analysis for each custom implementation and distinguish algorithm cost from database/API latency. |
+| Arrays and array memory representation | Implement/use | Inventory snapshots and sorted copies are arrays. Use arrays for custom sorting and binary search. A memory-address visualizer is unnecessary. |
+| Multidimensional arrays | Optional demonstration only | An 8×8 compatibility matrix is a meaningful 2D-array use if a verified educational table is included. Explain row = recipient/requested group and column = donor stock group. This is a compact and relevant syllabus connection. |
+| Sparse matrix and simple/fast transpose | Exclude | The compatibility matrix is small and dense; it is not a sparse-matrix problem. Adding sparse transpose would be unrelated. |
+| Ordered list and row-major/column-major address calculation | Theory only / exclude from app | A database table or inventory list is not a reason to implement manual matrix-address calculation. This concept is not central to the project workflow. |
+| Linear search | Must implement | Search an unsorted in-memory inventory snapshot by bag ID. Expected `O(n)`. |
+| Binary search | Must implement | Search a copy/list sorted by the exact key being searched, such as bag ID. Expected `O(log n)` after sorting. Never run binary search on unsorted data or directly on the heap array. |
+| Indexed search | Optional extension | A custom hash table by unique bag ID is the more direct exact-key index for this project. Do not implement a second index-search scheme unless it is clearly explained and tested. |
+| Fibonacci search | Optional DSA Lab only | It can search a sorted array, but adds little to the core application. Implement only if time permits and compare it with binary search on the same sorted sample. |
+| Bubble sort | DSA Lab optional | Can be a teaching comparison on a tiny sample; not recommended for normal inventory views due to `O(n²)` time. |
+| Selection sort | DSA Lab optional | Same rationale as bubble sort; not needed for core application. |
+| Insertion sort | DSA Lab optional | Useful for demonstrating a simple sort or nearly sorted small sample; not required for the core workflow. |
+| Merge sort | Must implement | Sort inventory snapshots by expiry date, collection date, or group. Stable `O(n log n)` time and `O(n)` auxiliary space. |
+| Quick sort | Must implement | A second custom sorting algorithm for inventory snapshots. Average `O(n log n)`, worst-case `O(n²)`; choose and document a pivot strategy. |
+| Heap sort | Optional, not required | The project already uses heaps for priority scheduling and FEFO. Heap sort is a different algorithm; do not claim that using a priority queue means heap sort is implemented. Add only if the course rubric specifically requires it. |
+| Radix sort | Exclude / optional lab only | Sorting dates or IDs would require a carefully chosen key representation; it is not needed for the primary workflow. |
+| Shell sort | Exclude / optional lab only | No strong application advantage over the selected Merge Sort and Quick Sort. |
+| Bucket sort | Exclude / optional lab only | Not required for this data size or workflow. |
+| Comparative sorting analysis | Must include in report/DSA Lab | Compare at least Merge Sort and Quick Sort by complexity, stability, memory use, and behavior. Other sorts may be described in a comparison table without being implemented. |
+
+### Unit 2 — Linked Lists and Vectors
+
+| Syllabus topic | Decision | Exact project use and reasoning |
+|---|---|---|
+| Dynamic memory allocation | Explain in report / language-level implementation | Dynamic objects and arrays are allocated as records are added. TypeScript/JavaScript manages memory automatically; do not pretend the app manually allocates memory like C/C++. |
+| Singly linked list | Optional DSA Lab | Implement a generic singly linked list with insert, delete, search, and traversal only if time permits or the course rubric expects linked-list implementation. It is not the best primary structure for expiry ordering. |
+| Doubly linked list | Exclude from core | No clear requirement for backward/forward node navigation; a normal table and database query are simpler. Could be a separate lab demonstration, not core logic. |
+| Circular linked list | Exclude from core | No natural circular traversal requirement in the allocation workflow. Do not add a circular list merely for syllabus coverage. |
+| Generalized linked list | Exclude | No nested-list data model in the project needs this structure. |
+| Linked-list insertion/deletion/search/traversal/update | Optional lab if singly linked list is included | Demonstrate and test all operations on the same linked-list implementation. Do not claim these operations from using ordinary UI lists or database rows. |
+| Applications of linked lists | Explain only if included | A linked list could represent an in-memory event sequence, but an append-only dispatch log stored in SQLite is the more useful persistent design. |
+| Vectors | Use naturally where available; explain carefully | In TypeScript, arrays are dynamic arrays and can be compared conceptually with vectors. Do not label JavaScript arrays as C++ `std::vector`; explain the analogy. |
+
+### Unit 3 — Stacks and Queues
+
+| Syllabus topic | Decision | Exact project use and reasoning |
+|---|---|---|
+| Stack using array or linked list | Optional DSA Lab | There is no essential LIFO operation in the main workflow. Implement a small stack demonstration only if required by assessment. |
+| Recursion application | Optional algorithm explanation | Merge Sort and Quick Sort can be implemented recursively, making recursion visible. Explain the call stack and base case; a separate recursion feature is unnecessary. |
+| Infix/prefix/postfix conversion and evaluation | Exclude | Expression processing is unrelated to blood-stock allocation. Do not add a calculator feature. |
+| Linear queue | Optional arrival-order view | A FIFO queue can preserve arrival order for display, but it must not replace the priority heap for emergency processing. Use only if it adds a clear purpose. |
+| Circular queue | Optional bounded event buffer | Could store the most recent N in-memory UI/system events. It is not needed for persistent dispatch history, which belongs in the database. |
+| Deque | Exclude from core | The main request scheduler needs priority ordering, not insertion/removal at both ends. |
+| Job scheduling | Conceptual connection | Emergency request processing resembles scheduling, but implement it with the priority queue/heap, not an unrelated scheduling module. |
+| Josephus problem | Exclude | No meaningful relation to the project. |
+
+### Unit 4 — Trees
+
+| Syllabus topic | Decision | Exact project use and reasoning |
+|---|---|---|
+| Tree terminology and array/linked representation | Explain the binary heap | A binary heap is a complete binary tree commonly represented in an array. Document parent/child index formulas and heap invariants. This is the relevant tree connection. |
+| General tree to binary tree conversion | Exclude | The project has no general-tree data model. |
+| Binary tree traversals (recursive/non-recursive) | Optional DSA Lab | A small generic binary-tree traversal demo is possible but not required. Heap operations do not automatically mean the project implements all binary-tree traversals. |
+| Binary tree operations | Covered only to the extent needed by heap | Implement heap insert, peek, extract, sift-up and sift-down. Do not claim a general-purpose binary-tree implementation. |
+| Binary Search Tree (BST) | Exclude from core | The custom hash table and heap meet the actual lookup/scheduling needs. A BST would duplicate functionality without a strong use case. |
+| Threaded binary tree and traversals | Exclude | No practical requirement for threaded traversal in this application. |
+| Binary heap | Must implement, as the practical tree-based structure | Use one heap for emergency request priority and a min-heap per donor blood group for FEFO ordering. These are distinct heaps with different comparison rules. |
+
+### Unit 5 — Graphs
+
+| Syllabus topic | Decision | Exact project use and reasoning |
+|---|---|---|
+| Graph terminology, adjacency matrix/list | Exclude from core | A blood-group compatibility matrix is a relation table, not automatically a graph feature. Do not claim graph coverage merely because a matrix is used. |
+| BFS and DFS | Exclude | No graph traversal is needed for the scoped application. |
+| Connected/bipartite graphs and cycle detection | Exclude | These concepts do not naturally solve the selected allocation problem. |
+| Prim's/Kruskal's minimum spanning tree | Exclude | No need to design a minimum-cost network connecting blood banks in the basic project. |
+| Shortest path algorithms | Exclude from core | The synopsis mentions distance-based sorting, but real route calculation would require location data and would expand scope. If multiple blood-bank locations are later included, sort by a supplied distance field; do not claim this is a shortest-path algorithm. |
+| Union-Find / Disjoint Set Union | Exclude | No component-merging or connectivity problem is present in the core workflow. |
+| Optional future graph extension | Only if the project scope changes substantially | A separate multi-bank logistics extension could model banks and roads as a graph and use shortest paths. This is not recommended for the first version because it increases data, UI, and testing requirements without improving the central DSA demonstration. |
+
+### Unit 6 — Hashing
+
+| Syllabus topic | Decision | Exact project use and reasoning |
+|---|---|---|
+| Hash table and hash function | Recommended implementation | Implement a custom hash table for exact bag-ID or request-ID lookup in memory. Use a stable string hash and document it. |
+| Basic operations | Must be tested if hash table is included | Support at least insert, search/get, update, and delete (or explain if deletion is intentionally unsupported). |
+| Bucket, collision, probe, synonym, overflow | Explain and demonstrate | Show how two keys may map to the same bucket/index and how the chosen collision strategy handles it. |
+| Separate chaining / open hashing | Recommended collision strategy | Use an array of buckets where each bucket stores a chain/list of entries. This is straightforward to explain and test. If using chaining, describe it consistently as separate chaining/open hashing according to the terminology taught in the course. |
+| Open addressing / closed hashing | Alternative, not both required | Linear probing is a manageable alternative. Choose either chaining or open addressing for the first version; do not implement both unless there is enough time and a clear comparison purpose. |
+| Perfect hash function | Explain only | Runtime user-entered IDs are not a fixed known key set, so a perfect hash function is not appropriate for this project. |
+| Properties of a good hash function | Required report note if hashing is implemented | Discuss deterministic output, reasonably distributed keys, low clustering, and use of modulo/table capacity as appropriate. |
+| Hash table overflow | Explain/test | Define behavior when the table is full for open addressing, or how chaining behaves as entries grow. Do not confuse hash-table capacity with blood-stock capacity. |
+| Extendible hashing | Exclude | Too advanced and unnecessary for the project's small in-memory lookup index. SQLite handles persistent storage. |
+
+### Final DSA Selection — What Claude Must Actually Build
+
+**Core required implementations (the minimum strong DSA submission):**
+1. Array-based custom binary heap for request prioritization.
+2. Per-blood-group custom min-heaps for FEFO stock selection, or one custom min-heap with a clearly defined group filter if that design is simpler and remains efficient/correct.
+3. Custom Merge Sort.
+4. Custom Quick Sort.
+5. Custom Linear Search.
+6. Custom Binary Search on a sorted array.
+7. A dedicated compatibility lookup table/matrix and tested lookup function.
+8. Complexity analysis and tests for each of the above.
+
+**Recommended additional implementation if schedule permits:**
+9. Custom hash table using separate chaining for bag-ID/request-ID lookup.
+10. Optional circular queue or singly linked list as a small DSA Lab exercise, not as a forced part of the main allocation logic.
+
+**Must not be claimed unless separately implemented:**
+- Heap Sort (using a heap as a priority queue is not Heap Sort).
+- BST, threaded tree, BFS/DFS, shortest paths, MST, Union-Find.
+- Stack expression conversion/evaluation.
+- Sparse matrix transpose.
+- Fibonacci search, Radix/Shell/Bucket sort, or all linked-list variants.
+
+### Demonstration and Assessment Rule
+
+For every implemented DSA concept, provide all four:
+1. **Why it fits:** the real application problem it solves.
+2. **Where it is used:** the exact module/function and user workflow.
+3. **How it works:** a short explanation or visual demonstration of its key operations/invariant.
+4. **How it is verified:** unit tests covering normal, boundary, and failure cases.
+
+A concept mentioned only in the report, a library function, or a decorative UI screen does not count as an implemented DSA concept.
+
+---
+
+## 7. Suggested DSA Module Design
+
+Keep DSA logic separate from Express routes and React components. Use TypeScript types and small modules such as:
+
+```text
+server/
+  src/
+    dsa/
+      BinaryHeap.ts
+      FefoInventory.ts
+      mergeSort.ts
+      quickSort.ts
+      linearSearch.ts
+      binarySearch.ts
+      HashTable.ts              # recommended, if time permits
+    domain/
+      compatibility.ts
+      allocationService.ts
+      priority.ts
+    routes/
+      inventory.routes.ts
+      requests.routes.ts
+      dispatch.routes.ts
+      analytics.routes.ts
+    db/
+      schema.sql
+      database.ts
+    tests/
+      BinaryHeap.test.ts
+      FefoInventory.test.ts
+      sorting.test.ts
+      searching.test.ts
+      compatibility.test.ts
+      allocationService.test.ts
+```
+
+Names can vary, but keep this separation:
+- `dsa/`: generic data structure and algorithm implementations
+- `domain/`: application rules and orchestration
+- `routes/`: HTTP request/response handling
+- `db/`: persistence
+- `tests/`: automated correctness tests
+
+Do not put heap implementation directly inside a route handler or React component.
+
+### Priority comparator
+Use a single comparator for request priority. Recommended order:
+1. Smaller urgency number first (1, then 2, then 3)
+2. Earlier arrival sequence first
+3. Request ID as deterministic final tie-breaker
+
+This avoids ambiguity around composite scores and makes the behavior easy to explain during assessment.
+
+### FEFO ordering
+For eligible stock in each donor blood group:
+1. Earliest expiry date first
+2. Bag ID ascending for equal expiry dates
+
+Before allocation, exclude expired bags and bags not in `available` status. When a bag is allocated, persist the status change and remove it from the available FEFO structure.
+
+### Allocation transaction safety
+An allocation must not leave the database and in-memory structures inconsistent:
+- Validate the request and stock first.
+- Determine the planned bag IDs.
+- Persist allocation/status updates together in a database transaction where supported.
+- Update/rebuild the relevant in-memory structures after the transaction succeeds.
+- If the transaction fails, do not report a successful dispatch.
+- On server startup, rebuild heaps/indexes from current database records rather than assuming in-memory state survived a restart.
+
+---
+
+## 8. Blood Compatibility Rules: Treat as a Configurable Educational Table
+
+Implement a module such as `getCompatibleDonorGroups(requiredGroup)` that returns a list of donor groups considered eligible by the simulation.
+
+The project synopsis refers to an 8×8 compatibility matrix and gives examples such as O− as a broad donor group and AB+ as a broad recipient group. Use a well-documented **red-blood-cell compatibility teaching table** only as a simplified demo assumption, and ensure the table direction is explicit:
+
+- Input = recipient/requested blood group
+- Output = donor stock groups the simulation permits for that recipient
+
+Do not reverse donor-to-recipient and recipient-from-donor directions. Add tests for all eight requested groups and include tests for broad examples such as O− donor stock being considered for multiple recipients and AB+ recipient being able to receive from multiple donor groups under the simplified table. Explain that this is not a clinical validation system.
+
+If the team cannot confidently verify the full matrix, use only exact blood-group matching for the first safe, clearly scoped version and describe cross-group fallback as a future extension. Never implement an unverified matrix while presenting it as medically reliable.
+
+---
+
+## 9. Data Model
+
+A simple relational schema is sufficient.
+
+### `blood_bags`
+- `id` (primary key)
+- `bag_id` (unique)
+- `blood_group`
+- `collection_date`
+- `expiry_date`
+- `volume_ml` (optional)
+- `location`
+- `status`
+- `created_at`
+- `updated_at`
+
+### `hospital_requests`
+- `id` (primary key)
+- `request_id` (unique)
+- `hospital_name`
+- `required_blood_group`
+- `units_needed`
+- `units_allocated`
+- `urgency_level`
+- `arrival_sequence`
+- `status`
+- `created_at`
+- `updated_at`
+
+### `dispatches`
+- `id` (primary key)
+- `request_id` (foreign key)
+- `processed_at`
+- `units_allocated`
+- `units_remaining`
+- `result`
+- `decision_summary`
+
+### `dispatch_items`
+- `id` (primary key)
+- `dispatch_id` (foreign key)
+- `blood_bag_id` (foreign key)
+- `donor_blood_group`
+- `expiry_date_at_dispatch`
+
+Use a dispatch-item table so each allocated bag can be traced to a request and dispatch event. Keep schema and migrations simple. Avoid storing duplicated fields unless there is a clear reason.
+
+---
+
+## 10. API Requirements
+
+Use REST endpoints with consistent JSON responses and validation. These are suggested endpoints; adapt names if needed.
+
+### Inventory
+- `GET /api/inventory` — list and filter stock
+- `GET /api/inventory/:bagId` — get a bag
+- `POST /api/inventory` — add a bag
+- `PATCH /api/inventory/:bagId` — update allowed fields/status
+- `GET /api/inventory/summary` — stock counts by group/status
+
+### Requests
+- `GET /api/requests` — list/filter requests
+- `GET /api/requests/:requestId` — request details
+- `POST /api/requests` — create request
+- `PATCH /api/requests/:requestId/cancel` — cancel eligible pending request
+- `POST /api/requests/process-next` — process one highest-priority request
+
+### Dispatch
+- `GET /api/dispatches` — list dispatch history
+- `GET /api/dispatches/:id` — dispatch details and allocated bags
+
+### Analytics / DSA
+- `GET /api/analytics/dashboard` — real counts and expiry warnings
+- `POST /api/dsa/sort-demo` — optional: run a named sorting algorithm on a sample or selected inventory list
+- `POST /api/dsa/search-demo` — optional: run a named search on an appropriate list
+
+Do not expose arbitrary code execution through DSA demo endpoints. Validate allowed algorithm names and input sizes.
+
+---
+
+## 11. Frontend Pages and User Experience
+
+Create a clean, professional dashboard with a restrained visual design. Suggested navigation:
+
+1. **Dashboard** — KPIs, blood-group stock summary, expiry warnings, pending priority requests, recent dispatches.
+2. **Blood Inventory** — table, add/edit form, filters, sorting, bag detail.
+3. **Hospital Requests** — request creation, urgency badges, priority order, process-next action, status and shortage details.
+4. **Dispatch History** — completed/partial attempts and allocated bag-level details.
+5. **DSA Lab** — interactive demonstrations of the actual heap, sorting, and searching modules.
+6. **About / DSA Notes** — short explanation of the problem, selected data structures, and complexities.
+
+UI requirements:
+- Loading, empty, success, and error states
+- Form validation messages
+- Confirmation before destructive actions
+- Clear distinction between available, reserved/dispatched, and expired stock
+- Do not rely only on color to convey urgency/status
+- Tables should work on smaller screens (horizontal scroll or responsive cards)
+- Explain why a request was selected and why particular stock was chosen
+- Do not imply that the app makes real medical decisions
+
+---
+
+## 12. Required Correctness and Test Cases
+
+At minimum, write automated tests for the following.
+
+### Heap / priority queue
+- A critical request is processed before a routine request even if the routine request arrived first.
+- Two requests with equal urgency are ordered by arrival sequence.
+- Empty heap behavior is defined.
+- Insert, peek, extract, and heap ordering are correct after multiple operations.
+
+### FEFO
+- Earliest-expiring eligible bag is allocated first.
+- Equal expiry dates use the defined deterministic tie-breaker.
+- Expired bags are never allocated.
+- Dispatched/unavailable bags are never allocated again.
+- A newly added bag appears in the correct group structure.
+- After server restart, in-memory structures rebuild from persisted data.
+
+### Compatibility
+- All eight requested groups have a defined result.
+- The matrix direction is recipient/request → eligible donor groups.
+- An ineligible group is never allocated.
+- Exact-match-only fallback works if compatibility fallback is disabled.
+
+### Sorting / searching
+- Merge Sort returns correct ascending and descending order where supported.
+- Quick Sort returns the same correct ordering as a trusted test expectation.
+- Duplicate keys are handled deterministically.
+- Binary Search returns the correct match / not-found result on a sorted array.
+- Binary Search is never used on an unsorted array.
+- Linear Search works on an unsorted array.
+
+### Allocation workflow
+- A request with enough compatible stock is fulfilled.
+- A request with partial stock records allocated units and remaining shortage correctly.
+- A request with no eligible stock remains pending and shows a shortage.
+- Each bag can be dispatched at most once.
+- A database failure does not produce a false success response.
+- Cancelled/fulfilled requests cannot be processed again.
+- Processing one request does not accidentally process all requests.
+- A partially fulfilled request follows the documented requeue policy.
+
+### API / UI
+- Invalid blood groups, invalid urgency values, and non-positive quantities are rejected.
+- Inventory and request forms show validation errors.
+- Dashboard metrics change after adding stock, creating requests, and dispatching.
+- Dispatch history reflects the actual allocation records.
+
+---
+
+## 13. Complexity Table to Include in the Project Report
+
+Explain the complexity of the actual implementations used. A suitable starting table is:
+
+| Operation | Data structure / algorithm | Expected complexity |
+|---|---|---:|
+| Peek next request | Binary heap | `O(1)` |
+| Insert request | Binary heap | `O(log n)` |
+| Remove highest-priority request | Binary heap | `O(log n)` |
+| Peek earliest expiry in one group | Min-heap | `O(1)` |
+| Insert/remove one bag in FEFO heap | Min-heap | `O(log n)` |
+| Linear search | Array | `O(n)` |
+| Binary search after sorting | Sorted array | `O(log n)` |
+| Merge Sort | Array | `O(n log n)` time, `O(n)` extra space |
+| Quick Sort | Array | Average `O(n log n)`, worst `O(n²)` |
+| Hash-table lookup | Custom hash table | Average `O(1)`, worst `O(n)` |
+| Database persistence | SQLite | Depends on query/index; do not claim a DSA complexity for all DB operations |
+
+Do not claim the whole request allocation process is `O(log n)`: it may inspect several compatible blood groups and allocate multiple bags. Describe the overall cost based on the actual number of groups and bags processed.
+
+---
+
+## 14. Implementation Plan
+
+Build in this order and keep each stage runnable.
+
+### Phase 1 — Project setup
+- Create frontend and backend folders
+- Configure TypeScript, scripts, linting, and tests
+- Create SQLite schema and seed data
+- Confirm app starts locally
+
+### Phase 2 — DSA core first
+- Implement and test binary heap for request priority
+- Implement and test per-group FEFO min-heaps
+- Implement and test Merge Sort, Quick Sort, Linear Search, Binary Search
+- Implement and test compatibility lookup
+- Add custom hash table only after core operations work
+
+### Phase 3 — Backend
+- Implement validation and inventory endpoints
+- Implement request endpoints
+- Implement transactional allocation service and dispatch logging
+- Rebuild in-memory structures from the database on startup
+- Test endpoints independently
+
+### Phase 4 — Frontend
+- Build dashboard
+- Build inventory and request forms/tables
+- Build process-next interaction and result explanation
+- Build dispatch history
+- Build DSA Lab connected to the real algorithm modules
+
+### Phase 5 — Verification and delivery
+- Run all tests
+- Test empty database and seeded database
+- Test expired and insufficient stock scenarios
+- Check responsive UI and error states
+- Write setup instructions, screenshots, architecture, DSA explanation, and complexity analysis
+
+Do not begin by generating a large, polished UI with placeholder behavior. Get the core DSA and allocation workflow correct first.
+
+---
+
+## 15. Seed Data Requirements
+
+Include a small synthetic seed dataset that covers:
+- Several bags across all or most blood groups
+- Different expiry dates, including at least one expired bag
+- Two bags with the same expiry date to test tie-breaking
+- At least one critical, one surgery, and one routine request
+- A case where a request can be fulfilled fully
+- A case where it can only be partially fulfilled
+- A case with no eligible stock
+- A case where compatible alternatives are considered (only if the verified educational compatibility table is enabled)
+
+Display a clear **Reset Demo Data** option only if it is implemented safely and confirms before reset.
+
+---
+
+## 16. Definition of Done
+
+The project is complete when:
+- It runs locally from documented instructions.
+- Data persists across backend restarts.
+- The UI can create and inspect inventory and hospital requests.
+- The app processes one request according to the priority heap.
+- Allocation checks compatibility and uses FEFO correctly.
+- Expired or unavailable bags are never allocated.
+- Partial/no-stock outcomes are represented honestly.
+- Dispatch records can be inspected.
+- At least two sorting algorithms and two search algorithms are implemented and tested.
+- The DSA Lab demonstrates the actual implementation, not a fake simulation.
+- The README documents architecture, setup, data structures, algorithm choices, complexity, assumptions, and limitations.
+- The project remains focused and explainable for a second-year DSA course.
+
+---
+
+## 17. Instructions for Claude While Building
+
+1. Start by reviewing this specification and produce a concise implementation plan and proposed folder structure.
+2. Identify any ambiguity before coding, especially compatibility rules, request requeue behavior, and data consistency.
+3. Implement the project incrementally, file by file, and keep it runnable at each milestone.
+4. Never claim an algorithm is implemented until the code and tests exist.
+5. Do not use built-in sort/priority queue implementations for the DSA operations being assessed. Built-in sorting may be used in test assertions only, where appropriate.
+6. Do not invent DSA coverage. If a concept is not meaningfully used, list it as out of scope.
+7. Keep core allocation logic in testable functions independent of HTTP and UI.
+8. Use readable code and comments that help a student explain the algorithm during a viva.
+9. After each milestone, report files created, commands to run, tests passed, known limitations, and the next step.
+10. Avoid unnecessary abstractions, microservices, complex authentication, or infrastructure.
+11. Never use real patient data or claim that the app is suitable for real-world clinical use.
+12. If the coding environment cannot create files directly, output complete files in clearly labelled sections and explain where each file belongs.
+
+**Final priority:** correctness of DSA implementation and allocation rules first, working full-stack behavior second, visual polish third.
